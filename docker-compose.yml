@@ -1,0 +1,78 @@
+version: "3.8" # Sempre bom especificar a versão
+
+services:
+  database:
+    image: mysql:8.0
+    container_name: mysql-container
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: shop_db_homolog
+      MYSQL_USER: shop_user
+      MYSQL_PASSWORD: shop_pass
+      MYSQL_ROOT_HOST: "%"
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  backend:
+    build: ./Backend
+    container_name: backend
+    environment:
+      - DB_HOST=database
+      - DB_PORT=3306
+      - DB_USER=shop_user
+      - DB_PASSWORD=shop_pass
+      - DB_NAME=shop_db_homolog
+      - DB_NAME_TEST=shop_db_test
+      - JWT_SECRET=YuriAlbertopaidoporcoepeixe
+      - JWT_EXPIRES_IN=8h
+      - NODE_ENV=production
+    ports:
+      - "3000:3000"
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  frontend:
+    build: ./FrontEnd
+    container_name: frontend
+    environment:
+      - VITE_API_URL=/api/
+    ports:
+      - "5173:3000"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx-proxy
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    networks:
+      - app-network
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db_data:
+
+networks:
+  app-network:
+    driver: bridge
